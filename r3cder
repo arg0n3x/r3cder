@@ -1,0 +1,119 @@
+#!/usr/bin/bash
+
+version='5.0.0'
+
+# number of times the file will be overwritten
+OVERWRITE=1
+
+# prevents issues with file name containing spaces
+IFS=$'\n'
+
+# color list
+GRN="\e[01;32m"; RED="\e[01;31m"
+YLL="\e[01;33m"; BLU="\e[01;34m"
+END="\e[00m"
+
+# execution indicators
+OK="${GRN}[+]${END}"
+WAR="${YLL}[!]${END}"
+ERR="${RED}[-]${END}"
+
+
+# display an error message passed as an argument to the function and exits with exit 1
+errorMessage(){
+  local message="$1"
+
+  echo -e "\n${RED}[ERROR]${END} $message\n"
+  exit 1
+}
+
+# display the script help menu
+help_menu(){
+cat << EOF
+use: ${0##*/} -d <directory path> [-o <number>] [-v] [-h]
+
+description:
+  irreversibly overwrites all files in a directory
+
+opciones:
+ -d         path to the directory where files will be overwriteten recursively.
+ -o         number of times files will be overwritten (default ${OVERWRITE}).
+ -h         display the help menu.
+ -v         script version.
+EOF
+exit 0
+}
+
+# overwrites the files in the specified directory irreversibly
+overwriteFiles(){
+  local dpath="$1"
+  local overwrite="$2"
+  local total_files="$3"
+  local count=1
+
+  # finds alll files and directories, exluding the root directory itself
+  find "$dpath" -type f | while read -r file; do
+    echo -e "${YLL}[${END}${count}/${total_files}${YLL}]${END} $file"
+    shred -fzu -n $overwrite "$file" 2>/dev/null
+    count=$((count + 1))
+  done
+}
+
+# displays a summary of actions to be performed
+showInfo(){
+  local dpath="$1"
+  local overwrite="$2"
+
+  # counts the number of files in the directory
+  local countFiles=$(find "$dpath" -type f 2>/dev/null | wc -l)
+
+  if [[ $countFiles -eq 0 ]]; then
+    echo -e "${OK} not fies were found in the directory"
+    exit 0
+  else
+    local getSize=$(du -sh "$dpath" | awk '{print $1}')
+    echo -e "${WAR} $getSize of disk space will be freed"
+    echo -e "${WAR} $countFiles files will be overwritten" 
+    sleep 1
+  fi
+
+  overwriteFiles "$dpath" "$overwrite" "$countFiles"
+}
+
+
+# checks thath at least one parameter is passed to the script
+if [[ $# -eq 0 ]]; then
+  errorMessage "use -h to display the help menu"
+fi
+
+# parses the command line parameters
+while getopts ':d:o:vh' args 2>/dev/null; do
+    case "$args" in
+        \?)
+            errorMessage "-$OPTARG is not a valid parameter, use -h"
+            ;;
+        :)
+            errorMessage "-$OPTARG requires an argument, use -h"
+            ;;
+        h)
+            help_menu
+            ;;
+        v)
+            echo -e "v$version"; exit 0
+            ;;
+        o)
+            OVERWRITE=$OPTARG
+            ;;
+        d)
+            dpath=$OPTARG
+            ;;
+    esac
+done
+
+# checks that the directory exists
+if [[ ! -d "$dpath" ]]; then
+  errorMessage "directory '$dpath' does not exist"
+fi
+
+showInfo "$dpath" "$OVERWRITE"
+
